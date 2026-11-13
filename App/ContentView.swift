@@ -39,7 +39,7 @@ struct ContentView: View {
                             ForEach(blockedPrefixes, id: \.self) { prefix in
                                 Text(prefix)
                             }
-                            .onDelete(removePrefix)
+                            .onDelete(perform: removePrefix)
                         }
                     }
                 }
