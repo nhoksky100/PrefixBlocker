@@ -1,12 +1,20 @@
-public struct SharedStorage {
-    public static func save(prefixes: [String]) {
-        // Đảm bảo dùng chung App Group Suite Name
-        let defaults = UserDefaults(suiteName: "group.com.nhoksky100.PrefixBlocker")
-        defaults?.set(prefixes, forKey: "blockedPrefixes")
+import Foundation
+
+class SharedStorage {
+    static let suiteName = "group.com.yourname.PrefixBlocker"
+    static let prefixesKey = "blocked_prefixes"
+    
+    static func savePrefixes(_ prefixes: [String]) {
+        if let defaults = UserDefaults(suiteName: suiteName) {
+            defaults.set(prefixes, forKey: prefixesKey)
+            defaults.synchronize()
+        }
     }
     
-    public static func load() -> [String] {
-        let defaults = UserDefaults(suiteName: "group.com.nhoksky100.PrefixBlocker")
-        return defaults?.stringArray(forKey: "blockedPrefixes") ?? []
+    static func getPrefixes() -> [String] {
+        if let defaults = UserDefaults(suiteName: suiteName) {
+            return defaults.stringArray(forKey: prefixesKey) ?? ["+8423", "+8425"]
+        }
+        return ["+8423", "+8425"]
     }
 }

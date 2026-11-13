@@ -1,22 +1,24 @@
 import SwiftUI
+import CallKit
 
 struct ContentView: View {
-    @State private var inputPrefix: String = ""
-    @State private var blockedPrefixes: [String] = []
+    // Danh sách mặc định theo yêu cầu của bạn
+    @State private var prefixes: [String] = SharedStorage.getPrefixes()
+    @State private var newPrefix: String = ""
+    @State private var statusMessage: String = "Sẵn sàng cập nhật"
+    @State private var isLoading: Bool = false
+
+    let extensionBundleID = "com.yourname.PrefixBlocker.CallBlockerExtension"
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                Text("Chặn Cuộc Gọi Theo Đầu Số")
-                    .font(.headline)
-                    .padding(.top)
-
-                // Ô nhập đầu số
+            VStack(spacing: 16) {
+                // Ô nhập đầu số dạng +8423, +8425...
                 HStack {
-                    TextField("Nhập đầu số (VD: +8423)", text: $inputPrefix)
+                    TextField("Nhập đầu số (VD: +8423)", text: $newPrefix)
+                        .keyboardType(.phonePad) // Bàn phím có dấu +
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .keyboardType(.phonePad)
-
+                    
                     Button(action: addPrefix) {
                         Text("Thêm")
                             .bold()
@@ -26,74 +28,96 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .cornerRadius(8)
                     }
+                    .disabled(newPrefix.isEmpty)
                 }
                 .padding(.horizontal)
 
-                // Danh sách các đầu số đang chặn
+                // Hiển thị danh sách đầu số đang chặn
                 List {
-                    Section(header: Text("Danh sách đầu số đã thêm")) {
-                        if blockedPrefixes.isEmpty {
-                            Text("Chưa có đầu số nào được thêm.")
-                                .foregroundColor(.gray)
-                        } else {
-                            ForEach(blockedPrefixes, id: \.self) { prefix in
-                                Text(prefix)
-                            }
-                            .onDelete(perform: removePrefix)
+                    ForEach(prefixes, id: \.self) { prefix in
+                        HStack {
+                            Text("Đầu số: \(prefix)")
+                                .font(.headline)
+                            Spacer()
+                            Text("Chặn")
+                                .font(.caption)
+                                .padding(4)
+                                .background(Color.red.opacity(0.15))
+                                .foregroundColor(.red)
+                                .cornerRadius(4)
                         }
                     }
+                    .onDelete(perform: deletePrefix)
                 }
 
-                // Nút kích hoạt cập nhật extension
-                Button(action: saveAndReload) {
-                    Text("Cập nhật danh sách chặn")
-                        .bold()
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                Text(statusMessage)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                Button(action: reloadCallDirectory) {
+                    HStack {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        }
+                        Text(isLoading ? "Đang nạp vào iPhone..." : "Kích hoạt danh sách chặn")
+                            .bold()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
                 }
                 .padding(.horizontal)
-
-                Spacer()
+                .disabled(isLoading)
             }
-            .navigationTitle("PrefixBlocker")
-            .onAppear(perform: loadPrefixes)
+            .navigationTitle("Chặn Đầu Số +84")
         }
     }
 
-    // Thêm đầu số vào danh sách tạm
-    func addPrefix() {
-        let trimmed = inputPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty && !blockedPrefixes.contains(trimmed) {
-            blockedPrefixes.append(trimmed)
-            inputPrefix = ""
-            SharedStorage.save(prefixes: blockedPrefixes)
+    private func addPrefix() {
+        // Loại bỏ khoảng trắng thừa
+        var cleaned = newPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Tự động chuẩn hóa: nếu nhập 023 -> chuyển thành +8423 cho đồng bộ giao diện
+        if cleaned.hasPrefix("0") {
+            cleaned = "+84" + cleaned.dropFirst()
+        } else if cleaned.hasPrefix("84") {
+            cleaned = "+" + cleaned
         }
+        
+        guard cleaned.hasPrefix("+84"), cleaned.count >= 4, !prefixes.contains(cleaned) else {
+            statusMessage = "Vui lòng nhập đúng định dạng (VD: +8423 hoặc 023)"
+            return
+        }
+        
+        prefixes.append(cleaned)
+        SharedStorage.savePrefixes(prefixes)
+        newPrefix = ""
+        statusMessage = "Đã thêm \(cleaned). Nhấn kích hoạt để áp dụng."
     }
 
-    // Xóa đầu số
-    func removePrefix(at offsets: IndexSet) {
-        blockedPrefixes.remove(atOffsets: offsets)
-        SharedStorage.save(prefixes: blockedPrefixes)
+    private func deletePrefix(at offsets: IndexSet) {
+        prefixes.remove(atOffsets: offsets)
+        SharedStorage.savePrefixes(prefixes)
     }
 
-    // Tải danh sách khi mở app
-    func loadPrefixes() {
-        blockedPrefixes = SharedStorage.load()
-    }
-
-    // Lưu và gọi reload extension
-    func saveAndReload() {
-        SharedStorage.save(prefixes: blockedPrefixes)
-        // Gọi reload Call Directory Extension
-        // CXCallDirectoryManager.sharedInstance.reloadExtension(withIdentifier: ...)
-    }
-}
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+    private func reloadCallDirectory() {
+        isLoading = true
+        statusMessage = "Đang đồng bộ danh sách với hệ thống..."
+        
+        CXCallDirectoryManager.sharedInstance.reloadExtension(withIdentifier: extensionBundleID) { error in
+            DispatchQueue.main.async {
+                isLoading = false
+                if let error = error {
+                    statusMessage = "Lỗi: \(error.localizedDescription)"
+                } else {
+                    statusMessage = "Thành công! Đã chặn các đầu số trong danh sách."
+                }
+            }
+        }
     }
 }

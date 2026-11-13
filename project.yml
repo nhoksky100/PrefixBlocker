@@ -12,9 +12,12 @@ targets:
       - path: App
       - path: Shared
     info:
-      path: App/Info.xml   # <-- Trỏ sang file .xml
+      path: App/Info.plist
     entitlements:
       path: App/PrefixBlocker.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.yourname.PrefixBlocker
     dependencies:
       - target: CallBlockerExtension
 
@@ -25,6 +28,9 @@ targets:
       - path: Extension
       - path: Shared
     info:
-      path: Extension/Info.xml # <-- Trỏ sang file .xml
+      path: Extension/Info.plist
     entitlements:
       path: Extension/CallBlockerExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.yourname.PrefixBlocker
