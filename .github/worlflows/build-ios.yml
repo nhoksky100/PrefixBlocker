@@ -1,0 +1,43 @@
+name: Build Unsigned iOS IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Cho phép bấm nút chạy thủ công bất cứ lúc nào
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Tải mã nguồn về máy chủ Mac
+        uses: actions/checkout@v4
+
+      - name: Cài đặt XcodeGen
+        run: brew install xcodegen
+
+      - name: Tạo file dự án .xcodeproj tự động
+        run: xcodegen generate
+
+      - name: Biên dịch ứng dụng (Build Archive)
+        run: |
+          xcodebuild archive \
+            -project PrefixBlocker.xcodeproj \
+            -scheme PrefixBlocker \
+            -configuration Release \
+            -archivePath build/PrefixBlocker.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Đóng gói thành file .ipa
+        run: |
+          mkdir -p Payload
+          cp -r build/PrefixBlocker.xcarchive/Products/Applications/PrefixBlocker.app Payload/
+          zip -r PrefixBlocker.ipa Payload
+
+      - name: Xuất file .ipa để tải về Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrefixBlocker-IPA
+          path: PrefixBlocker.ipa

@@ -1,0 +1,30 @@
+name: PrefixBlocker
+options:
+  bundleIdPrefix: com.yourname
+  deploymentTarget:
+    iOS: "16.0"
+
+targets:
+  PrefixBlocker:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Shared
+    info:
+      path: App/Info.xml   # <-- Trỏ sang file .xml
+    entitlements:
+      path: App/PrefixBlocker.entitlements
+    dependencies:
+      - target: CallBlockerExtension
+
+  CallBlockerExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Extension
+      - path: Shared
+    info:
+      path: Extension/Info.xml # <-- Trỏ sang file .xml
+    entitlements:
+      path: Extension/CallBlockerExtension.entitlements
