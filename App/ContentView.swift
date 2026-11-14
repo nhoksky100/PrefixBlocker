@@ -109,7 +109,7 @@ struct ContentView: View {
         isLoading = true
         statusMessage = "Đang đồng bộ danh sách với hệ thống..."
         
-        CXCallDirectoryManager.sharedInstance.reloadExtension(withIdentifier: extensionBundleID) { error in
+        CXCallDirectoryManager.sharedInstance.reloadExtension(withIdentifier: "com.nhoksky100.PrefixBlocker.CallBlockerExtension") { error in
             DispatchQueue.main.async {
                 isLoading = false
                 if let error = error {
