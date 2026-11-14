@@ -8,27 +8,24 @@ targets:
   PrefixBlocker:
     type: application
     platform: iOS
-    sources:
-      - path: App
-      - path: Shared
+    sources: [App, Shared]
     info:
       path: App/Info.plist
     entitlements:
       path: App/PrefixBlocker.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.yourname.PrefixBlocker
     dependencies:
       - target: CallBlockerExtension
 
   CallBlockerExtension:
     type: app-extension
     platform: iOS
-    sources:
-      - path: Extension
-      - path: Shared
+    sources: [Extension, Shared]
     info:
       path: Extension/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.callkit.call-directory
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CallDirectoryHandler
     entitlements:
       path: Extension/CallBlockerExtension.entitlements
       properties:
