@@ -1,5 +1,4 @@
-
-      name: PrefixBlocker
+name: PrefixBlocker
 options:
   bundleIdPrefix: com.nhoksky100
   deploymentTarget:
