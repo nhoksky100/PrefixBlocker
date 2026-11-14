@@ -1,12 +1,11 @@
 import Foundation
 
 public struct SharedStorage {
-    // Tên App Group dùng chung giữa App chính và Extension
     private static let suiteName = "group.com.nhoksky100.PrefixBlocker"
     private static let blockedPrefixesKey = "blockedPrefixes"
 
-    // Lưu danh sách đầu số cần chặn
-    public static func save(prefixes: [String]) {
+    // Hàm lưu danh sách đầu số (khớp với ContentView.swift)
+    public static func savePrefixes(_ prefixes: [String]) {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             return
         }
@@ -14,8 +13,8 @@ public struct SharedStorage {
         defaults.synchronize()
     }
 
-    // Đọc danh sách đầu số đã lưu
-    public static func load() -> [String] {
+    // Hàm đọc danh sách đầu số (khớp với ContentView.swift và CallDirectoryHandler.swift)
+    public static func getPrefixes() -> [String] {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             return []
         }
