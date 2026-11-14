@@ -28,6 +28,4 @@ targets:
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CallDirectoryHandler
     entitlements:
       path: Extension/CallBlockerExtension.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.yourname.PrefixBlocker
+      
