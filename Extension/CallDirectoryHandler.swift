@@ -15,7 +15,7 @@ class CallDirectoryHandler: CXCallDirectoryProvider {
     }
 
     private func addAllBlockingPhoneNumbers(to context: CXCallDirectoryExtensionContext) {
-        let suiteName = "group.com.yourname.PrefixBlocker"
+       let suiteName = "group.com.nhoksky100.PrefixBlocker"
         let rawPrefixes = UserDefaults(suiteName: suiteName)?.stringArray(forKey: "blocked_prefixes") ?? ["+8423", "+8425"]
         
         // 1. Làm sạch dấu '+' và chuyển thành số nguyên để sắp xếp tăng dần
