@@ -1,23 +1,16 @@
 import Foundation
 
-public struct SharedStorage {
-    private static let suiteName = "group.com.nhoksky100.PrefixBlocker"
-    private static let blockedPrefixesKey = "blockedPrefixes"
-
-    // Hàm lưu danh sách đầu số (khớp với ContentView.swift)
-    public static func savePrefixes(_ prefixes: [String]) {
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return
-        }
-        defaults.set(prefixes, forKey: blockedPrefixesKey)
-        defaults.synchronize()
+struct SharedStorage {
+    static let suiteName = "group.com.nhoksky100.ChanSoRac"
+    static let key = "blocked_prefixes"
+    
+    static func getPrefixes() -> [String] {
+        let defaults = UserDefaults(suiteName: suiteName)
+        return defaults?.stringArray(forKey: key) ?? ["+8423", "+8424", "+8425", "+8426", "+8427", "+8428", "+8429"]
     }
-
-    // Hàm đọc danh sách đầu số (khớp với ContentView.swift và CallDirectoryHandler.swift)
-    public static func getPrefixes() -> [String] {
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return []
-        }
-        return defaults.stringArray(forKey: blockedPrefixesKey) ?? []
+    
+    static func savePrefixes(_ prefixes: [String]) {
+        let defaults = UserDefaults(suiteName: suiteName)
+        defaults?.set(prefixes, forKey: key)
     }
 }

@@ -22,10 +22,10 @@ jobs:
       - name: Biên dịch ứng dụng (Build Archive)
         run: |
           xcodebuild archive \
-            -project PrefixBlocker.xcodeproj \
-            -scheme PrefixBlocker \
+            -project ChanSoRac.xcodeproj \
+            -scheme ChanSoRac \
             -configuration Release \
-            -archivePath build/PrefixBlocker.xcarchive \
+            -archivePath build/ChanSoRac.xcarchive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
@@ -33,11 +33,11 @@ jobs:
       - name: Đóng gói thành file .ipa
         run: |
           mkdir -p Payload
-          cp -r build/PrefixBlocker.xcarchive/Products/Applications/PrefixBlocker.app Payload/
-          zip -r PrefixBlocker.ipa Payload
+          cp -r build/ChanSoRac.xcarchive/Products/Applications/ChanSoRac.app Payload/
+          zip -r ChanSoRac.ipa Payload
 
       - name: Xuất file .ipa để tải về Windows
         uses: actions/upload-artifact@v4
         with:
-          name: PrefixBlocker-IPA
-          path: PrefixBlocker.ipa
+          name: ChanSoRac-IPA
+          path: ChanSoRac.ipa

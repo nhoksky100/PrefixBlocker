@@ -1,27 +1,26 @@
-name: PrefixBlocker
+name: ChanSoRac
 options:
   bundleIdPrefix: com.nhoksky100
   deploymentTarget:
-    iOS: "15.0"
+    iOS: 15.0
 
 targets:
-  PrefixBlocker:
+  ChanSoRac:
     type: application
     platform: iOS
     sources:
       - App
       - Shared
-    info:
-      path: App/Info.plist
     entitlements:
       path: App/PrefixBlocker.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.nhoksky100.ChanSoRac
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nhoksky100.PrefixBlocker
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
-        GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_OUTPUT_FORMAT: xml
+        PRODUCT_BUNDLE_IDENTIFIER: com.nhoksky100.ChanSoRac
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_STYLE: Automatic
     dependencies:
       - target: CallBlockerExtension
 
@@ -31,14 +30,13 @@ targets:
     sources:
       - Extension
       - Shared
-    info:
-      path: Extension/Info.plist
     entitlements:
       path: Extension/CallBlockerExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.nhoksky100.ChanSoRac
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nhoksky100.PrefixBlocker.CallBlockerExtension
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
-        GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_OUTPUT_FORMAT: xml
+        PRODUCT_BUNDLE_IDENTIFIER: com.nhoksky100.ChanSoRac.CallBlockerExtension
+        INFOPLIST_FILE: Extension/Info.plist
+        CODE_SIGN_STYLE: Automatic
