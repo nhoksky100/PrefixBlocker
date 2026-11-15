@@ -8,7 +8,7 @@ struct ContentView: View {
     @State private var statusMessage: String = "Sẵn sàng cập nhật"
     @State private var isLoading: Bool = false
 
-    let extensionBundleID = "com.yourname.PrefixBlocker.CallBlockerExtension"
+    let extensionBundleID = "com.nhoksky100.PrefixBlocker.CallBlockerExtension"
 
     var body: some View {
         NavigationView {
