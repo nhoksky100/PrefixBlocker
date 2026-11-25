@@ -1,5 +1,14 @@
 import SwiftUI
 import CallKit
+import UIKit
+
+private enum ContentField: Hashable {
+    case profileName
+    case profilePhone
+    case ruleValue
+    case rangeEnd
+    case phoneToCheck
+}
 
 struct ContentView: View {
     private let extensionBundleID = "com.nhoksky100.ChanSoRac.CallBlockerExtension"
@@ -15,10 +24,15 @@ struct ContentView: View {
     @State private var selectedCategory: PhoneCategory = .spam
     @State private var checkMatches: [ManagedRule] = []
     @State private var hasCheckedPhone = false
-    @State private var statusText = "Đang tải dữ liệu..."
+    @State private var profileFeedback = ""
+    @State private var ruleFeedback = ""
+    @State private var checkFeedback = ""
+    @State private var syncFeedback = "Đang tải dữ liệu..."
     @State private var callKitStatusText = "Chưa kiểm tra trạng thái CallKit"
     @State private var isReloading = false
     @State private var storageReady = true
+    @State private var hasLoadedStore = false
+    @FocusState private var focusedField: ContentField?
 
     private let paper = Color(red: 0.96, green: 0.93, blue: 0.86)
     private let ink = Color(red: 0.17, green: 0.17, blue: 0.14)
@@ -57,6 +71,15 @@ struct ContentView: View {
             .navigationBarHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Xong") {
+                    dismissKeyboard()
+                }
+                .foregroundColor(olive)
+            }
+        }
         .onAppear(perform: loadStore)
     }
 
@@ -111,13 +134,11 @@ struct ContentView: View {
                 .foregroundColor(paper)
             }
             .disabled(isReloading || !storageReady)
-            Text(statusText)
-                .font(.system(size: 11, design: .serif))
-                .foregroundColor(statusText.hasPrefix("Lỗi") ? rust : ink.opacity(0.7))
+            feedbackLabel(syncFeedback)
         }
         .padding(14)
         .background(paper.opacity(0.8))
-        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8))
+        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8).allowsHitTesting(false))
     }
 
     private var profileCard: some View {
@@ -142,7 +163,9 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(profile.name)
                                 .font(.system(size: 15, weight: .bold, design: .serif))
-                            Text(profile.targetPhone.isEmpty ? "Chưa khai báo số đích" : "+\(profile.targetPhone)")
+                            Text(profile.targetPhone.isEmpty
+                                 ? "Chưa khai báo số đích"
+                                 : (VietnamPhoneNumber.normalize(profile.targetPhone).map { "+\($0)" } ?? profile.targetPhone))
                                 .font(.system(size: 12, design: .serif))
                                 .foregroundColor(ink.opacity(0.7))
                         }
@@ -152,14 +175,16 @@ struct ContentView: View {
                             .foregroundColor(rust)
                     }
                     .padding(10)
-                    .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.7))
+                    .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.7).allowsHitTesting(false))
                 }
             }
 
-            TextField("Tên hồ sơ (ví dụ: Điện thoại cá nhân)", text: $profileName)
+            TextField("Tên hồ sơ (để trống sẽ tự đặt tên)", text: $profileName)
+                .focused($focusedField, equals: .profileName)
                 .textFieldStyle(ClassicTextFieldStyle(paper: paper, ink: ink, line: ruleLine))
-            TextField("Số điện thoại đích (ví dụ: 0912345678)", text: $profilePhone)
+            TextField("Số điện thoại đích (không bắt buộc)", text: $profilePhone)
                 .keyboardType(.phonePad)
+                .focused($focusedField, equals: .profilePhone)
                 .textFieldStyle(ClassicTextFieldStyle(paper: paper, ink: ink, line: ruleLine))
             Button(action: addProfile) {
                 Text("TẠO HỒ SƠ")
@@ -167,14 +192,15 @@ struct ContentView: View {
                     .tracking(0.6)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .overlay(Rectangle().stroke(olive, lineWidth: 1))
+                    .overlay(Rectangle().stroke(olive, lineWidth: 1).allowsHitTesting(false))
                     .foregroundColor(olive)
             }
             .disabled(!storageReady)
+            feedbackLabel(profileFeedback)
         }
         .padding(14)
         .background(paper.opacity(0.8))
-        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8))
+        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8).allowsHitTesting(false))
     }
 
     private var ruleEditorCard: some View {
@@ -193,10 +219,12 @@ struct ContentView: View {
             .pickerStyle(SegmentedPickerStyle())
             TextField(rulePlaceholder, text: $ruleValue)
                 .keyboardType(.phonePad)
+                .focused($focusedField, equals: .ruleValue)
                 .textFieldStyle(ClassicTextFieldStyle(paper: paper, ink: ink, line: ruleLine))
             if ruleKind == .range {
                 TextField("Đến số (ví dụ: 0912345699)", text: $rangeEnd)
                     .keyboardType(.phonePad)
+                    .focused($focusedField, equals: .rangeEnd)
                     .textFieldStyle(ClassicTextFieldStyle(paper: paper, ink: ink, line: ruleLine))
             }
             HStack {
@@ -231,10 +259,11 @@ struct ContentView: View {
                     .foregroundColor(paper)
             }
             .disabled(selectedProfile == nil || !storageReady)
+            feedbackLabel(ruleFeedback)
         }
         .padding(14)
         .background(paper.opacity(0.8))
-        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8))
+        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8).allowsHitTesting(false))
     }
 
     private var quickCheckCard: some View {
@@ -242,14 +271,19 @@ struct ContentView: View {
             sectionHeading("TRA CỨU NHANH", number: "04")
             TextField("Nhập số cần kiểm tra", text: $phoneToCheck)
                 .keyboardType(.phonePad)
+                .focused($focusedField, equals: .phoneToCheck)
                 .textFieldStyle(ClassicTextFieldStyle(paper: paper, ink: ink, line: ruleLine))
+                .onChange(of: phoneToCheck) { _ in
+                    hasCheckedPhone = false
+                    checkFeedback = ""
+                }
             Button(action: checkPhone) {
                 Text("KIỂM TRA SỐ")
                     .font(.system(size: 11, weight: .bold, design: .serif))
                     .tracking(0.6)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .overlay(Rectangle().stroke(olive, lineWidth: 1))
+                    .overlay(Rectangle().stroke(olive, lineWidth: 1).allowsHitTesting(false))
                     .foregroundColor(olive)
             }
             if hasCheckedPhone {
@@ -273,13 +307,14 @@ struct ContentView: View {
                     }
                 }
             }
+            feedbackLabel(checkFeedback)
             Text("Mỗi lần tra cứu khớp sẽ tăng bộ đếm của quy tắc tương ứng.")
                 .font(.system(size: 10, design: .serif))
                 .foregroundColor(ink.opacity(0.65))
         }
         .padding(14)
         .background(paper.opacity(0.8))
-        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8))
+        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8).allowsHitTesting(false))
     }
 
     private var managedRulesCard: some View {
@@ -297,7 +332,7 @@ struct ContentView: View {
         }
         .padding(14)
         .background(paper.opacity(0.8))
-        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8))
+        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8).allowsHitTesting(false))
     }
 
     private var systemNote: some View {
@@ -311,7 +346,7 @@ struct ContentView: View {
                 .foregroundColor(ink.opacity(0.82))
         }
         .padding(12)
-        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8))
+        .overlay(Rectangle().stroke(ruleLine, lineWidth: 0.8).allowsHitTesting(false))
     }
 
     private var rulePlaceholder: String {
@@ -377,44 +412,55 @@ struct ContentView: View {
         }
         .padding(.vertical, 9)
         .padding(.horizontal, 10)
-        .overlay(Rectangle().stroke(ruleLine.opacity(0.8), lineWidth: 0.6))
+        .overlay(Rectangle().stroke(ruleLine.opacity(0.8), lineWidth: 0.6).allowsHitTesting(false))
     }
 
     private func loadStore() {
+        guard !hasLoadedStore else { return }
+        hasLoadedStore = true
         do {
             store = try SharedStorage.load()
             selectedProfileID = store.profiles.first?.id
             storageReady = true
-            statusText = "Dữ liệu App Group đã tải."
+            syncFeedback = "Đã tải \(store.profiles.count) hồ sơ và \(store.rules.count) quy tắc."
             refreshCallKitStatus()
         } catch {
             storageReady = false
-            statusText = "Lỗi dữ liệu: \(error.localizedDescription)"
+            syncFeedback = "Lỗi tải App Group: \(error.localizedDescription)"
         }
     }
 
     private func addProfile() {
+        dismissKeyboard()
+        profileFeedback = ""
+
         let name = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else {
-            statusText = "Lỗi: Hãy nhập tên hồ sơ."
-            return
+        let phoneInput = profilePhone.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedPhone = VietnamPhoneNumber.normalize(phoneInput) ?? phoneInput
+
+        let profileName = name.isEmpty ? "Hồ sơ \(store.profiles.count + 1)" : name
+        let profile = ManagedProfile(name: profileName, targetPhone: savedPhone)
+        var updatedStore = store
+        updatedStore.profiles.append(profile)
+
+        do {
+            try SharedStorage.save(updatedStore)
+            store = updatedStore
+            selectedProfileID = profile.id
+            self.profileName = ""
+            profilePhone = ""
+            profileFeedback = "Đã tạo và chọn “\(profile.name)” (\(store.profiles.count) hồ sơ)."
+        } catch {
+            profileFeedback = "Lỗi lưu hồ sơ: \(error.localizedDescription)"
         }
-        guard let phone = VietnamPhoneNumber.normalize(profilePhone),
-              VietnamPhoneNumber.isCompleteSubscriberNumber(phone) else {
-            statusText = "Lỗi: Hãy nhập số điện thoại đích đầy đủ."
-            return
-        }
-        let profile = ManagedProfile(name: name, targetPhone: phone)
-        store.profiles.append(profile)
-        selectedProfileID = profile.id
-        profileName = ""
-        profilePhone = ""
-        saveStore(reloadExtension: false)
     }
 
     private func addRule() {
+        dismissKeyboard()
+        ruleFeedback = ""
+
         guard let profile = selectedProfile else {
-            statusText = "Lỗi: Hãy chọn hồ sơ trước."
+            ruleFeedback = "Lỗi: Hãy tạo hoặc chọn hồ sơ trước khi lưu quy tắc."
             return
         }
 
@@ -423,14 +469,14 @@ struct ContentView: View {
         switch ruleKind {
         case .prefix:
             guard let normalized = VietnamPhoneNumber.normalizePrefix(ruleValue) else {
-                statusText = "Lỗi: Đầu số chưa hợp lệ."
+                ruleFeedback = "Lỗi: Đầu số chưa hợp lệ. Ví dụ đúng: +8423, 023 hoặc 8423."
                 return
             }
             value = normalized
         case .exact:
             guard let normalized = VietnamPhoneNumber.normalize(ruleValue),
                   VietnamPhoneNumber.isCompleteSubscriberNumber(normalized) else {
-                statusText = "Lỗi: Hãy nhập số đầy đủ hợp lệ."
+                ruleFeedback = "Lỗi: Hãy nhập số điện thoại Việt Nam đầy đủ."
                 return
             }
             value = normalized
@@ -443,11 +489,11 @@ struct ContentView: View {
                   let startNumber = Int64(start),
                   let endNumber = Int64(end),
                   endNumber >= startNumber else {
-                statusText = "Lỗi: Dải số không hợp lệ."
+                ruleFeedback = "Lỗi: Hãy nhập dải số hợp lệ, cùng độ dài và số cuối không nhỏ hơn số đầu."
                 return
             }
             guard endNumber - startNumber + 1 <= SharedStorage.maximumRangeEntries else {
-                statusText = "Lỗi: Mỗi dải CallKit tối đa 10.000 số."
+                ruleFeedback = "Lỗi: Mỗi dải CallKit tối đa 10.000 số."
                 return
             }
             value = start
@@ -461,97 +507,129 @@ struct ContentView: View {
             rangeEnd: endValue,
             category: selectedCategory
         )
-        let candidateRules = store.rules + [rule]
+        var updatedStore = store
+        updatedStore.rules.append(rule)
         do {
-            _ = try SharedStorage.buildBlockingNumbers(from: candidateRules)
+            _ = try SharedStorage.buildBlockingNumbers(from: updatedStore.rules)
+            try SharedStorage.save(updatedStore)
+            store = updatedStore
+            ruleValue = ""
+            rangeEnd = ""
+            ruleFeedback = "Đã lưu \(rule.kind.rawValue.lowercased()) \(rule.displayValue) vào “\(profile.name)”. Tổng \(store.rules.count) quy tắc."
+            syncCallDirectory()
         } catch {
-            statusText = "Lỗi: \(error.localizedDescription)"
-            return
+            ruleFeedback = "Lỗi lưu quy tắc: \(error.localizedDescription)"
         }
-        store.rules.append(rule)
-        ruleValue = ""
-        rangeEnd = ""
-        saveStore(reloadExtension: true)
     }
 
     private func checkPhone() {
+        dismissKeyboard()
+        hasCheckedPhone = false
+        checkMatches = []
+        checkFeedback = ""
+
+        guard storageReady else {
+            checkFeedback = "Lỗi: Không đọc được dữ liệu App Group để tra cứu."
+            return
+        }
         guard let number = VietnamPhoneNumber.normalize(phoneToCheck),
               VietnamPhoneNumber.isCompleteSubscriberNumber(number) else {
-            hasCheckedPhone = false
-            statusText = "Lỗi: Hãy nhập số Việt Nam đầy đủ để tra cứu."
+            checkFeedback = "Lỗi: Hãy nhập số Việt Nam đầy đủ rồi bấm kiểm tra."
             return
         }
         let matches = SharedStorage.matchingRules(for: number, in: store.rules)
         checkMatches = matches
         hasCheckedPhone = true
-        guard !matches.isEmpty else { return }
+        guard !matches.isEmpty else {
+            checkFeedback = "Đã kiểm tra +\(number): không khớp quy tắc đang bật; phân loại Số lạ."
+            return
+        }
 
         let matchedIDs = Set(matches.map(\.id))
-        store.rules = store.rules.map { rule in
+        var updatedStore = store
+        updatedStore.rules = updatedStore.rules.map { rule in
             guard matchedIDs.contains(rule.id) else { return rule }
             var updated = rule
             updated.recordCount += 1
             updated.lastUpdated = Date()
             return updated
         }
-        saveStore(reloadExtension: false)
+        do {
+            try SharedStorage.save(updatedStore)
+            store = updatedStore
+            checkFeedback = "Đã kiểm tra +\(number): khớp \(matches.count) quy tắc; bộ đếm đã cập nhật."
+        } catch {
+            checkFeedback = "Đã khớp \(matches.count) quy tắc nhưng không lưu được bộ đếm: \(error.localizedDescription)"
+        }
     }
 
     private func setRuleEnabled(_ id: UUID, enabled: Bool) {
         guard let index = store.rules.firstIndex(where: { $0.id == id }) else { return }
-        let previousRule = store.rules[index]
-        store.rules[index].isEnabled = enabled
-        store.rules[index].lastUpdated = Date()
+        var updatedStore = store
+        updatedStore.rules[index].isEnabled = enabled
+        updatedStore.rules[index].lastUpdated = Date()
         do {
-            _ = try SharedStorage.buildBlockingNumbers(from: store.rules)
-            saveStore(reloadExtension: true)
+            _ = try SharedStorage.buildBlockingNumbers(from: updatedStore.rules)
+            try SharedStorage.save(updatedStore)
+            store = updatedStore
+            ruleFeedback = "Đã \(enabled ? "bật" : "tắt") quy tắc \(updatedStore.rules[index].displayValue)."
+            syncCallDirectory()
         } catch {
-            store.rules[index] = previousRule
-            statusText = "Lỗi: \(error.localizedDescription)"
+            ruleFeedback = "Lỗi cập nhật quy tắc: \(error.localizedDescription)"
         }
     }
 
     private func deleteRule(_ rule: ManagedRule) {
-        store.rules.removeAll { $0.id == rule.id }
-        saveStore(reloadExtension: true)
+        var updatedStore = store
+        updatedStore.rules.removeAll { $0.id == rule.id }
+        do {
+            try SharedStorage.save(updatedStore)
+            store = updatedStore
+            ruleFeedback = "Đã xóa quy tắc \(rule.displayValue). Còn \(store.rules.count) quy tắc."
+            syncCallDirectory()
+        } catch {
+            ruleFeedback = "Lỗi xóa quy tắc: \(error.localizedDescription)"
+        }
     }
 
     private func deleteProfile(_ profile: ManagedProfile) {
-        store.profiles.removeAll { $0.id == profile.id }
-        store.rules.removeAll { $0.profileID == profile.id }
-        selectedProfileID = store.profiles.first?.id
-        saveStore(reloadExtension: true)
-    }
-
-    private func saveStore(reloadExtension: Bool) {
-        guard storageReady else { return }
+        var updatedStore = store
+        updatedStore.profiles.removeAll { $0.id == profile.id }
+        updatedStore.rules.removeAll { $0.profileID == profile.id }
         do {
-            try SharedStorage.save(store)
-            statusText = "Đã lưu dữ liệu hồ sơ."
-            if reloadExtension { syncCallDirectory() }
+            try SharedStorage.save(updatedStore)
+            store = updatedStore
+            selectedProfileID = store.profiles.first?.id
+            profileFeedback = "Đã xóa hồ sơ “\(profile.name)” và các quy tắc thuộc hồ sơ."
+            syncCallDirectory()
         } catch {
-            statusText = "Lỗi lưu dữ liệu: \(error.localizedDescription)"
+            profileFeedback = "Lỗi xóa hồ sơ: \(error.localizedDescription)"
         }
     }
 
     private func syncCallDirectory() {
-        guard storageReady else { return }
+        dismissKeyboard()
+        guard storageReady else {
+            syncFeedback = "Lỗi: Không thể đọc dữ liệu App Group."
+            return
+        }
         do {
             _ = try SharedStorage.buildBlockingNumbers(from: store.rules)
         } catch {
-            statusText = "Lỗi: \(error.localizedDescription)"
+            syncFeedback = "Lỗi tạo danh sách CallKit: \(error.localizedDescription)"
             return
         }
 
         isReloading = true
-        statusText = "Đang yêu cầu extension nạp danh sách..."
+        syncFeedback = "Đang yêu cầu extension nạp \(callKitNumberCountLabel)..."
         CXCallDirectoryManager.sharedInstance.reloadExtension(withIdentifier: extensionBundleID) { error in
             DispatchQueue.main.async {
                 isReloading = false
                 if let error = error {
-                    statusText = "Lỗi CallKit: \(error.localizedDescription)"
+                    let callKitError = error as NSError
+                    syncFeedback = "Lỗi CallKit [\(callKitError.domain):\(callKitError.code)]: \(callKitError.localizedDescription)"
                 } else {
-                    statusText = "Đã yêu cầu CallKit cập nhật lúc \(Date().formatted(date: .omitted, time: .shortened))."
+                    syncFeedback = "Đồng bộ thành công \(callKitNumberCountLabel) lúc \(Date().formatted(date: .omitted, time: .shortened))."
                     refreshCallKitStatus()
                 }
             }
@@ -594,6 +672,25 @@ struct ContentView: View {
             return "Số đầy đủ có trong danh sách CallKit sau khi đồng bộ"
         }
     }
+
+    private func dismissKeyboard() {
+        focusedField = nil
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    @ViewBuilder
+    private func feedbackLabel(_ message: String) -> some View {
+        if !message.isEmpty {
+            Text(message)
+                .font(.system(size: 11, design: .serif))
+                .foregroundColor(
+                    message.hasPrefix("Lỗi") || message.contains("không lưu được")
+                        ? rust
+                        : olive
+                )
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 }
 
 private struct ClassicTextFieldStyle: TextFieldStyle {
@@ -607,6 +704,6 @@ private struct ClassicTextFieldStyle: TextFieldStyle {
             .foregroundColor(ink)
             .padding(10)
             .background(paper)
-            .overlay(Rectangle().stroke(line, lineWidth: 0.7))
+            .overlay(Rectangle().stroke(line, lineWidth: 0.7).allowsHitTesting(false))
     }
 }
