@@ -11,7 +11,9 @@ private enum ContentField: Hashable {
 }
 
 struct ContentView: View {
-    private let extensionBundleID = "com.nhoksky100.ChanSoRac.CallBlockerExtension"
+    private var extensionBundleID: String {
+        "\(Bundle.main.bundleIdentifier ?? "com.nhoksky100.ChanSoRac").CallBlockerExtension"
+    }
 
     @State private var store = DirectoryData.empty
     @State private var selectedProfileID: UUID?
@@ -133,7 +135,6 @@ struct ContentView: View {
                 .background(olive)
                 .foregroundColor(paper)
             }
-            .disabled(isReloading || !storageReady)
             feedbackLabel(syncFeedback)
         }
         .padding(14)
@@ -195,7 +196,6 @@ struct ContentView: View {
                     .overlay(Rectangle().stroke(olive, lineWidth: 1).allowsHitTesting(false))
                     .foregroundColor(olive)
             }
-            .disabled(!storageReady)
             feedbackLabel(profileFeedback)
         }
         .padding(14)
@@ -258,7 +258,6 @@ struct ContentView: View {
                     .background(rust)
                     .foregroundColor(paper)
             }
-            .disabled(selectedProfile == nil || !storageReady)
             feedbackLabel(ruleFeedback)
         }
         .padding(14)
@@ -422,7 +421,7 @@ struct ContentView: View {
             store = try SharedStorage.load()
             selectedProfileID = store.profiles.first?.id
             storageReady = true
-            syncFeedback = "Đã tải \(store.profiles.count) hồ sơ và \(store.rules.count) quy tắc."
+            syncFeedback = "\(SharedStorage.storageModeMessage) Đã tải \(store.profiles.count) hồ sơ và \(store.rules.count) quy tắc."
             refreshCallKitStatus()
         } catch {
             storageReady = false
@@ -449,7 +448,8 @@ struct ContentView: View {
             selectedProfileID = profile.id
             self.profileName = ""
             profilePhone = ""
-            profileFeedback = "Đã tạo và chọn “\(profile.name)” (\(store.profiles.count) hồ sơ)."
+            profileFeedback = "Đã tạo và chọn “\(profile.name)” (\(store.profiles.count) hồ sơ). \(SharedStorage.storageModeMessage)"
+            storageReady = true
         } catch {
             profileFeedback = "Lỗi lưu hồ sơ: \(error.localizedDescription)"
         }
@@ -516,6 +516,7 @@ struct ContentView: View {
             ruleValue = ""
             rangeEnd = ""
             ruleFeedback = "Đã lưu \(rule.kind.rawValue.lowercased()) \(rule.displayValue) vào “\(profile.name)”. Tổng \(store.rules.count) quy tắc."
+            storageReady = true
             syncCallDirectory()
         } catch {
             ruleFeedback = "Lỗi lưu quy tắc: \(error.localizedDescription)"
@@ -609,8 +610,8 @@ struct ContentView: View {
 
     private func syncCallDirectory() {
         dismissKeyboard()
-        guard storageReady else {
-            syncFeedback = "Lỗi: Không thể đọc dữ liệu App Group."
+        guard !isReloading else {
+            syncFeedback = "Đang có yêu cầu đồng bộ CallKit chạy; vui lòng đợi hoàn tất."
             return
         }
         do {
@@ -621,7 +622,7 @@ struct ContentView: View {
         }
 
         isReloading = true
-        syncFeedback = "Đang yêu cầu extension nạp \(callKitNumberCountLabel)..."
+        syncFeedback = "Đang yêu cầu extension nạp \(callKitNumberCountLabel). \(SharedStorage.storageModeMessage)"
         CXCallDirectoryManager.sharedInstance.reloadExtension(withIdentifier: extensionBundleID) { error in
             DispatchQueue.main.async {
                 isReloading = false

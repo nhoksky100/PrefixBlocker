@@ -161,10 +161,37 @@ enum VietnamPhoneNumber {
 
 enum SharedStorage {
     static let suiteName = "group.com.nhoksky100.ChanSoRac"
+    static let teamScopedSuiteName = "group.com.nhoksky100.ChanSoRac.68977G9KU3"
+    private static let suiteNames = [teamScopedSuiteName, suiteName]
     private static let storeFileName = "chan_so_rac_store_v2.json"
+    private static let storeDataKey = "chan_so_rac_store_v2_data"
     private static let legacyRulesKey = "chan_so_rac_rules_v1"
     static let maximumCallKitEntries = 10_000
     static let maximumRangeEntries = 10_000
+
+    private static var appGroupContainerURLs: [URL] {
+        suiteNames.compactMap {
+            FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0)
+        }
+    }
+
+    private static var appGroupDefaults: [UserDefaults] {
+        suiteNames.compactMap { UserDefaults(suiteName: $0) }
+    }
+
+    static var hasSharedAppGroupAccess: Bool {
+        !appGroupContainerURLs.isEmpty || !appGroupDefaults.isEmpty
+    }
+
+    static var isUsingFallbackStorage: Bool {
+        !hasSharedAppGroupAccess
+    }
+
+    static var storageModeMessage: String {
+        isUsingFallbackStorage
+            ? "App Group không khả dụng; dữ liệu đang lưu trong UserDefaults/Documents riêng của ứng dụng. Call Directory extension không thể đọc kho dự phòng này."
+            : "Đang dùng App Group để chia sẻ dữ liệu với Call Directory extension."
+    }
 
     private struct LegacyRule: Decodable {
         var targetPhone: String
@@ -176,35 +203,44 @@ enum SharedStorage {
     }
 
     static func load() throws -> DirectoryData {
-        guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: suiteName
-        ) else {
-            throw PhoneNumberError.appGroupUnavailable
-        }
-        let fileURL = containerURL.appendingPathComponent(storeFileName, isDirectory: false)
-
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            do {
-                let data = try Data(contentsOf: fileURL)
-                guard let store = try? JSONDecoder().decode(DirectoryData.self, from: data) else {
-                    throw PhoneNumberError.unreadableData
-                }
-                return store
-            } catch let error as PhoneNumberError {
-                throw error
-            } catch {
-                throw PhoneNumberError.unreadableData
+        let groupURLs = appGroupContainerURLs
+        for containerURL in groupURLs {
+            let fileURL = containerURL.appendingPathComponent(storeFileName, isDirectory: false)
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                return try decodeStore(at: fileURL)
             }
         }
 
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            throw PhoneNumberError.appGroupUnavailable
-        }
-        if let legacyData = defaults.data(forKey: legacyRulesKey) {
-            guard let legacyRules = try? JSONDecoder().decode([LegacyRule].self, from: legacyData) else {
-                throw PhoneNumberError.unreadableData
+        let groupDefaults = appGroupDefaults
+        for defaults in groupDefaults {
+            if let data = defaults.data(forKey: storeDataKey) {
+                return try decodeStore(data)
             }
-            let migrated = migrate(legacyRules)
+        }
+
+        for defaults in groupDefaults {
+            if let legacyData = defaults.data(forKey: legacyRulesKey) {
+                let migrated = try decodeLegacyRules(legacyData)
+                try save(migrated)
+                return migrated
+            }
+        }
+
+        if !isUsingFallbackStorage {
+            return .empty
+        }
+
+        if let fallbackURL = fallbackFileURL(),
+           FileManager.default.fileExists(atPath: fallbackURL.path) {
+            return try decodeStore(at: fallbackURL)
+        }
+
+        let standardDefaults = UserDefaults.standard
+        if let data = standardDefaults.data(forKey: storeDataKey) {
+            return try decodeStore(data)
+        }
+        if let legacyData = standardDefaults.data(forKey: legacyRulesKey) {
+            let migrated = try decodeLegacyRules(legacyData)
             try save(migrated)
             return migrated
         }
@@ -213,18 +249,70 @@ enum SharedStorage {
     }
 
     static func save(_ store: DirectoryData) throws {
-        guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: suiteName
-        ) else {
+        let data = try JSONEncoder().encode(store)
+        let groupURLs = appGroupContainerURLs
+        let groupDefaults = appGroupDefaults
+
+        if let containerURL = groupURLs.first {
+            let fileURL = containerURL.appendingPathComponent(storeFileName, isDirectory: false)
+            try write(data, to: fileURL)
+            return
+        }
+
+        if let defaults = groupDefaults.first {
+            defaults.set(data, forKey: storeDataKey)
+            _ = defaults.synchronize()
+            return
+        }
+
+        guard let fallbackURL = fallbackFileURL() else {
             throw PhoneNumberError.appGroupUnavailable
         }
-        let data = try JSONEncoder().encode(store)
-        let fileURL = containerURL.appendingPathComponent(storeFileName, isDirectory: false)
-        try data.write(to: fileURL, options: .atomic)
+        UserDefaults.standard.set(data, forKey: storeDataKey)
+        do {
+            try write(data, to: fallbackURL)
+        } catch {
+            NSLog("Fallback Documents write failed; UserDefaults.standard has the store: %@", error.localizedDescription)
+        }
+    }
+
+    private static func decodeStore(at url: URL) throws -> DirectoryData {
+        do {
+            return try decodeStore(Data(contentsOf: url))
+        } catch let error as PhoneNumberError {
+            throw error
+        } catch {
+            throw PhoneNumberError.unreadableData
+        }
+    }
+
+    private static func decodeStore(_ data: Data) throws -> DirectoryData {
+        do {
+            return try JSONDecoder().decode(DirectoryData.self, from: data)
+        } catch {
+            throw PhoneNumberError.unreadableData
+        }
+    }
+
+    private static func decodeLegacyRules(_ data: Data) throws -> DirectoryData {
+        guard let legacyRules = try? JSONDecoder().decode([LegacyRule].self, from: data) else {
+            throw PhoneNumberError.unreadableData
+        }
+        return migrate(legacyRules)
+    }
+
+    private static func write(_ data: Data, to url: URL) throws {
+        try data.write(to: url, options: .atomic)
         try FileManager.default.setAttributes(
             [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-            ofItemAtPath: fileURL.path
+            ofItemAtPath: url.path
         )
+    }
+
+    private static func fallbackFileURL() -> URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent(storeFileName, isDirectory: false)
     }
 
     static func buildBlockingNumbers(from rules: [ManagedRule]) throws -> [Int64] {

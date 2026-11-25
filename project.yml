@@ -15,6 +15,7 @@ targets:
       path: App/PrefixBlocker.entitlements
       properties:
         com.apple.security.application-groups:
+          - group.com.nhoksky100.ChanSoRac.68977G9KU3
           - group.com.nhoksky100.ChanSoRac
     settings:
       base:
@@ -36,6 +37,7 @@ targets:
       path: Extension/CallBlockerExtension.entitlements
       properties:
         com.apple.security.application-groups:
+          - group.com.nhoksky100.ChanSoRac.68977G9KU3
           - group.com.nhoksky100.ChanSoRac
     settings:
       base:

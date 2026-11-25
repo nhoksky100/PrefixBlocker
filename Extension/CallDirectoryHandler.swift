@@ -6,12 +6,18 @@ final class CallDirectoryHandler: CXCallDirectoryProvider {
         context.delegate = self
 
         do {
+            guard SharedStorage.hasSharedAppGroupAccess else {
+                throw PhoneNumberError.appGroupUnavailable
+            }
             let store = try SharedStorage.load()
             let phoneNumbers = try SharedStorage.buildBlockingNumbers(from: store.rules)
+            let sortedUniqueNumbers = Array(Set(phoneNumbers.filter { $0 > 0 })).sorted()
 
             context.removeAllBlockingEntries()
-            for number in phoneNumbers {
+            var previousNumber: Int64 = 0
+            for number in sortedUniqueNumbers where number > previousNumber {
                 context.addBlockingEntry(withNextSequentialPhoneNumber: number)
+                previousNumber = number
             }
             context.completeRequest()
         } catch {
