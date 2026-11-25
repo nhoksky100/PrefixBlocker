@@ -21,6 +21,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.nhoksky100.ChanSoRac
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
     dependencies:
       - target: CallBlockerExtension
 
@@ -40,3 +42,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.nhoksky100.ChanSoRac.CallBlockerExtension
         INFOPLIST_FILE: Extension/Info.plist
         CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES

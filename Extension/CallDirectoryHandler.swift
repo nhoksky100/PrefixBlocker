@@ -1,26 +1,28 @@
 import Foundation
 import CallKit
 
-class CallDirectoryHandler: CXCallDirectoryProvider {
+final class CallDirectoryHandler: CXCallDirectoryProvider {
     override func beginRequest(with context: CXCallDirectoryExtensionContext) {
         context.delegate = self
 
-        // Luôn xóa dữ liệu cũ trước khi nạp lại danh sách đã sắp xếp tăng dần
-        context.removeAllBlockingEntries()
+        do {
+            let store = try SharedStorage.load()
+            let phoneNumbers = try SharedStorage.buildBlockingNumbers(from: store.rules)
 
-        let rules = SharedStorage.loadRules()
-        let phoneNumbers = SharedStorage.buildBlockingNumbers(from: rules)
-
-        for number in phoneNumbers where number > 0 {
-            context.addBlockingEntry(withNextSequentialPhoneNumber: number)
+            context.removeAllBlockingEntries()
+            for number in phoneNumbers {
+                context.addBlockingEntry(withNextSequentialPhoneNumber: number)
+            }
+            context.completeRequest()
+        } catch {
+            NSLog("Call Directory update failed: %@", error.localizedDescription)
+            context.cancelRequest(withError: error)
         }
-
-        context.completeRequest()
     }
 }
 
 extension CallDirectoryHandler: CXCallDirectoryExtensionContextDelegate {
     func requestFailed(for extensionContext: CXCallDirectoryExtensionContext, withError error: Error) {
-        NSLog("CallDirectory request failed: %@", error.localizedDescription)
+        NSLog("Call Directory request failed: %@", error.localizedDescription)
     }
 }
